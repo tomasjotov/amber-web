@@ -13,3 +13,5 @@ assets/lbar_* binary
 *.ICN binary
 *.TXT binary
 data/** binary
+data/**/*.json text eol=lf
+data/*.md text eol=lf
