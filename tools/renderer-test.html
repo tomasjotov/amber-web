@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Renderer smoke test</title>
+	<style>
+		body { background: #222; color: #ddd; font: 14px/1.4 monospace; margin: 16px; }
+		canvas { border: 1px solid #555; image-rendering: pixelated; background: #000; }
+		.ok { color: #6c6; }
+		.fail { color: #f66; }
+		.info { color: #aaa; }
+		pre { white-space: pre-wrap; }
+	</style>
+</head>
+<body>
+	<h1>WebGL2 renderer smoke test</h1>
+	<p>Serve the project root (<code>node tools/serve.mjs</code>) and open <code>/tools/renderer-test.html</code>.</p>
+	<canvas id="canvas" width="640" height="400"></canvas>
+	<pre id="log"></pre>
+	<script type="module" src="./renderer-test.js"></script>
+</body>
+</html>

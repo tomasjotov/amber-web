@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.png binary
+*.pyr binary
+*.dat binary
+*.raw binary
+assets/lbar_* binary

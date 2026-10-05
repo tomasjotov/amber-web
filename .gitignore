@@ -1,0 +1,10 @@
+# Original game data (copyrighted, not redistributable) - see data/README.md
+data/*
+!data/README.md
+
+# Generated output of tools and tests
+tools/out/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

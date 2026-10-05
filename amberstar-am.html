@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amberstar</title>
+<style>
+	html, body { margin: 0; height: 100%; background: #000; color: #ccc; font-family: system-ui, sans-serif; overflow: hidden; }
+	#game { display: block; width: 100vw; height: 100vh; outline: none; cursor: none; }
+	#status { position: fixed; left: 0; right: 0; top: 45%; text-align: center; font-size: 18px; pointer-events: none; }
+	#error { position: fixed; left: 8px; right: 8px; bottom: 8px; color: #f88; font: 12px monospace; white-space: pre-wrap; max-height: 40vh; overflow: auto; }
+	#back { position: fixed; top: 6px; right: 8px; color: #666; font-size: 12px; text-decoration: none; z-index: 2; }
+	#back:hover { color: #ccc; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="status">Loading…</div>
+<div id="error"></div>
+<a id="back" href="index.html">← game selection</a>
+<script type="module">
+import { AmbermoonHost, fetchDataFolder } from './src/host/ambermoonHost.js';
+import { createAmberstarGameData } from './src/amberstar/AmberstarGameData.js';
+const status = document.getElementById('status');
+const errorEl = document.getElementById('error');
+const showError = e => {
+	console.error(e);
+	if (errorEl.textContent.length < 20000)
+		errorEl.textContent += (e?.stack ?? String(e)) + '\n\n';
+};
+window.addEventListener('error', e => showError(e.error ?? e.message));
+window.addEventListener('unhandledrejection', e => showError(e.reason));
+try {
+	const params = new URLSearchParams(location.search);
+	status.textContent = 'Loading data…';
+	const amberstarFilesRaw = await fetchDataFolder('data/Amberstar');
+	const amberstarFiles = new Map([...amberstarFilesRaw].map(([k, v]) => [k.toUpperCase(), v]));
+	const files = await fetchDataFolder('data/Ambermoon');
+	const host = new AmbermoonHost(document.getElementById('game'), { onError: showError, skipIntro: true, storageName: 'amberstar-on-ambermoon',
+		transformGameData: base => { const r = createAmberstarGameData(base, amberstarFiles); window.amberstarContext = r.context; return { gameData: r.gameData, savegameManagerFactory: typeof r.savegameManager === 'function' ? r.savegameManager : null }; }, onExit: () => location.href = 'index.html' });
+	window.host = host;
+	await host.start(files, text => status.textContent = text);
+	status.textContent = '';
+	// Debug: ?newgame starts a new game right away
+	if (params.has('newgame')) {
+		const wait = () => new Promise(r => setTimeout(r, 200));
+		while (!host.mainMenu) await wait();
+		const { MainMenu } = await import('./src/ambermoon/Ambermoon.net/MainMenu.js');
+		host.mainMenu.Closed.invoke(MainMenu.CloseAction.NewGame);
+	}
+} catch (e) {
+	status.textContent = 'Start failed';
+	showError(e);
+}
+</script>
+</body>
+</html>

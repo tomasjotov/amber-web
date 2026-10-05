@@ -1,0 +1,31 @@
+// Port of Ambermoon.Data.Common/Enumerations/MonsterGraphicIndex.cs from Ambermoon.net (GPL-3.0, Copyright (C) Robert Schneckenhaus)
+
+export const MonsterGraphicIndex = Object.freeze({
+	None: 0,
+	Gargoyle: 1,
+	Undead: 2,
+	Demon: 3,
+	Orc: 4,
+	Lizard: 5,
+	Giant: 6,
+	Knight: 7,
+	MoragDragon: 8,
+	Golem: 9,
+	Hyrda: 10,
+	Magician: 11,
+	Minotaur: 12,
+	Nera: 13,
+	MagicGuard: 14,
+	FireDragon: 15,
+	Spider: 16,
+	Bandit: 17,
+	Beast: 18,
+	EnergySphere: 19,
+	MoranianMagician: 20,
+	AntiqueGuard: 21,
+	CurseWesp: 22,
+	Tornak: 23,
+	Gizzek: 24,
+	MoragMachine: 25,
+	SingleEye: 26 // Added in Ambermoon Advanced
+});

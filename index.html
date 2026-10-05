@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amber Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
+<style>
+	/* Same look as the demo launcher (demo/index.html) */
+	:root { --gold: #e3b45a; --gold-dim: #9c7a3a; --bg: #07060a; --text: #d9d2c3; --muted: #8d8576; --line: #3a2f1c; }
+	* { box-sizing: border-box; }
+	html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+	body { display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 56px 16px 24px;
+		background: radial-gradient(ellipse at 50% 20%, #1b1430 0%, #07060a 70%); }
+	.back { position: fixed; top: 12px; left: 16px; font-size: 12px; letter-spacing: .1em; color: var(--muted); text-decoration: none; }
+	.back:hover { color: var(--gold); }
+	.badge { font-size: 11px; letter-spacing: .3em; color: var(--gold-dim); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; margin-bottom: 18px; }
+	h1 { font-family: Cinzel, serif; font-weight: 700; letter-spacing: .08em; line-height: 1.2; max-width: 900px; color: var(--gold); margin: 0 0 6px; font-size: clamp(26px, 4.5vw, 44px); text-align: center; text-shadow: 0 0 24px rgba(227,180,90,.35); }
+	.sub { color: var(--muted); margin-bottom: 40px; font-size: 14px; letter-spacing: .1em; text-align: center; }
+	.games { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; width: min(980px, 100%); }
+	a.game { position: relative; display: flex; flex-direction: column; text-decoration: none; color: inherit; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+		background: linear-gradient(160deg, rgba(60,45,25,.55), rgba(20,16,28,.85)); transition: transform .15s, border-color .15s, box-shadow .15s; }
+	a.game:hover, a.game:focus-visible { transform: translateY(-3px); border-color: var(--gold); box-shadow: 0 10px 40px rgba(227,180,90,.18); outline: none; }
+	a.game .icon { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 56px; border-bottom: 1px solid var(--line);
+		background: radial-gradient(circle at 50% 60%, rgba(227,180,90,.12), rgba(0,0,0,0) 70%); }
+	a.game .body { padding: 22px 24px 24px; display: flex; flex-direction: column; flex: 1; }
+	a.game h2 { font-family: Cinzel, serif; color: var(--gold); margin: 0 0 4px; font-size: 24px; letter-spacing: .1em; }
+	a.game .tag { color: var(--gold-dim); font-size: 12px; letter-spacing: .15em; text-transform: uppercase; }
+	a.game p { margin: 14px 0 18px; line-height: 1.5; font-size: 14px; color: #bdb5a5; flex: 1; }
+	a.game .play { align-self: flex-start; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold-dim); border-radius: 6px; padding: 7px 16px; }
+	a.game:hover .play { background: rgba(227,180,90,.12); }
+	a.game .key { position: absolute; right: 12px; top: 10px; font-size: 12px; color: #6d6455; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+	footer { margin-top: auto; padding-top: 48px; font-size: 12px; color: #6d6455; text-align: center; line-height: 1.6; }
+	footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+	<a class="back" href="../">← All demos</a>
+	<div class="badge">THALION · 1992 – 1993</div>
+	<h1>Amber</h1>
+	<div class="sub">Web edition of the Amber RPG trilogy</div>
+
+	<div class="games">
+		<a class="game" href="ambermoon.html">
+			<span class="key">1</span>
+			<div class="icon">🌙</div>
+			<div class="body">
+				<h2>Ambermoon</h2>
+				<div class="tag">1993 · Amiga</div>
+				<p>The second part of the Amber trilogy. The Ambermoon.net remake in your browser: 2D and 3D world, battles, magic, music.</p>
+				<span class="play">Play</span>
+			</div>
+		</a>
+		<a class="game" href="amberstar-am.html">
+			<span class="key">2</span>
+			<div class="icon">⭐</div>
+			<div class="body">
+				<h2>Amberstar Remake</h2>
+				<div class="tag">1992 · Amiga</div>
+				<p>The first part of the trilogy on the Ambermoon engine: Ambermoon interface and controls, labyrinths in real 3D.</p>
+				<span class="play">Play</span>
+			</div>
+		</a>
+		<a class="game" href="amberstar/index.html">
+			<span class="key">3</span>
+			<div class="icon">📜</div>
+			<div class="body">
+				<h2>Amberstar Classic</h2>
+				<div class="tag">1992 · Amiga</div>
+				<p>Exact conversion to JS with the original UI.</p>
+				<span class="play">Play</span>
+			</div>
+		</a>
+	</div>
+
+	<footer>
+		The games use the original Amiga data (folder <code>data/</code>).<br>
+		The Ambermoon part is based on <a href="https://github.com/Pyrdacor/Ambermoon.net">Ambermoon.net</a> (GPL-3.0).
+	</footer>
+<script>
+	const links = ['ambermoon.html', 'amberstar-am.html', 'amberstar/index.html'];
+	document.addEventListener('keydown', e => {
+		const i = Number(e.key) - 1;
+		if (links[i])
+			location.href = links[i];
+	});
+</script>
+</body>
+</html>
