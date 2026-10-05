@@ -996,6 +996,9 @@ export class Layout {
 		}
 		this.AddSprite(boxArea, Graphics.GetCustomUIGraphicIndex(UICustomGraphic.BiggerInfoBox), this.game.UIPaletteIndex, 2);
 		this.AddText(textArea, versionString, TextColor.BrightGray, TextAlign.Center, 3);
+		// Web port: thanks to the author of Ambermoon.net (clickable, opens his page)
+		this.pyrdacorLinkArea = new Rect(boxArea.X, boxArea.Y + boxArea.Height + 3, boxArea.Width, 8);
+		this.AddText(this.pyrdacorLinkArea, 'THANKS TO PYRDACOR', TextColor.LightYellow, TextAlign.Center, 3);
 
 		this.buttonGrid.SetButton(0, ButtonType.Quit, false, () => this.game.Quit(), false, Button.GetTooltip(this.game.GameLanguage, Button.TooltipType.Quit));
 		this.buttonGrid.SetButton(1, ButtonType.Empty, false, null, false);
@@ -1017,6 +1020,9 @@ export class Layout {
 		removeItem(this.additionalSprites, last(this.additionalSprites));
 		last(this.additionalSprites)?.Delete(); // map disable overlay
 		removeItem(this.additionalSprites, last(this.additionalSprites));
+		last(this.texts)?.Destroy(); // thanks text (web port)
+		removeItem(this.texts, last(this.texts));
+		this.pyrdacorLinkArea = null;
 		last(this.texts)?.Destroy(); // version string
 		removeItem(this.texts, last(this.texts));
 		this.UpdateLayoutButtons(this.ticksPerMovement);
@@ -4829,6 +4835,10 @@ export class Layout {
 				return result(true);
 			}
 		} else if (!pickingNewLeader) {
+			if (this.OptionMenuOpen && !this.PopupActive && this.pyrdacorLinkArea?.Contains(position) && buttons === MouseButtons.Left) {
+				globalThis.open?.('https://amberworlds.info/pyrdacor', '_blank', 'noopener');
+				return result(true);
+			}
 			if (this.freeScrolledText != null) {
 				this.freeScrolledText.Click(position);
 				return result(true);
