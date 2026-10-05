@@ -1,7 +1,7 @@
 # Amber Web
 
 Ambermoon and Amberstar (Thalion, 1992/1993) in the browser.
-Cluade Opus 5.5 UI port.
+Claude Opus 5.5 UI port.
 Working demo on https://www.hrdinovefantasy.cz/demo/ambernew/
 
 - **Ambermoon** — a JavaScript port of [Ambermoon.net](https://github.com/Pyrdacor/Ambermoon.net) (the C# remake by Pyrdacor)
