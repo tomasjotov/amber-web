@@ -22,7 +22,7 @@ node tools/serve.mjs 8090
 
 Open http://localhost:8090/ and pick a game (keys 1, 2, 3).
 
-The original game data must be in `data/Ambermoon/` (Amiga `Amberfiles` folder of Ambermoon, English) and
+The original game data (abandonware) is included in `data/Ambermoon/` (Amiga `Amberfiles` folder of Ambermoon, English) and
 `data/Amberstar/` (Amiga `Amberfiles` of Amberstar, English 1.96, with `_new/` containing the fresh new-game files).
 Savegames and settings are stored in the browser (IndexedDB).
 

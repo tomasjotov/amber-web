@@ -1,0 +1,21 @@
+
+			     Amcode
+
+Written by Joerg Bublath 1994 - Freeware - no rights reserved.
+
+This program decodes and encodes savefiles of the game Ambermoon, which
+enables an experienced user to edit them with a binary-editor. This
+program seems not to be necessary for some versions of Ambermoon, that
+do not encode their savefiles. At least the german version I got made
+it necessary to decode them. Better test this on a dummy savefile or
+make a backup of the files first - you have been warned!
+
+Usage: amcode <sourcefile> <destfile>
+
+The coding is bi-directional, so an encoded file will be decoded when using
+this program and a decoded file will be encoded.
+
+Thanx to the authors of Ambermoon for a great fantasy-game.
+Buy it! Its worth hours of playing!
+
+

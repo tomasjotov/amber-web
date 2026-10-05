@@ -4,3 +4,12 @@
 *.dat binary
 *.raw binary
 assets/lbar_* binary
+*.amb binary
+*.AMB binary
+*.sav binary
+*.SAV binary
+*.UDO binary
+*.IMG binary
+*.ICN binary
+*.TXT binary
+data/** binary
