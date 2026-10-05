@@ -4,6 +4,9 @@ Ambermoon and Amberstar (Thalion, 1992/1993) in the browser.
 Claude Opus 5.5 UI port.
 Working demo on https://www.hrdinovefantasy.cz/demo/ambernew/
 
+**Special thanks to [Pyrdacor](https://amberworlds.info/pyrdacor)** ([GitHub](https://github.com/Pyrdacor)) for Ambermoon.net
+and all his work on the Amber games - this project would not exist without it.
+
 - **Ambermoon** — a JavaScript port of [Ambermoon.net](https://github.com/Pyrdacor/Ambermoon.net) (the C# remake by Pyrdacor)
   with a WebGL2 renderer, running on the original Amiga data.
 - **Amberstar** — the first game of the trilogy running on the same engine: the Amberstar world (maps, events, characters,
