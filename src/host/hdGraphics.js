@@ -46,54 +46,91 @@ function tryGet(getter, fallback) {
  * Most common neighbor graphics of each tile graphic of a tileset on all 2D maps.
  * Returns Map<atlas key (graphic index - 1), [left, right, top, bottom]> (atlas keys or null).
  */
-export function TileNeighbors(gameData, maps2D, tilesetIndex) {
+export function TileNeighbors(gameData, maps2D, tilesetIndex, maxCells = 200000) {
 	const tileset = gameData.MapManager.GetTilesetForMap({ TilesetOrLabdataIndex: tilesetIndex });
-	const counts = new Map(); // key -> [Map(neighbor -> count) x 4]
-	const graphicKey = tileIndex => {
-		const tile = tileIndex > 0 ? tileset.Tiles[tileIndex - 1] : null;
-		return tile != null && tile.GraphicIndex > 0 ? tile.GraphicIndex - 1 : null;
-	};
+	const tiles = tileset.Tiles;
+	// tile index (1 based) -> atlas key (graphic index - 1), -1 = none
+	const tileKeys = new Int32Array(tiles.length + 1).fill(-1);
+
+	for (let i = 0; i < tiles.length; ++i) {
+		if (tiles[i]?.GraphicIndex > 0)
+			tileKeys[i + 1] = tiles[i].GraphicIndex - 1;
+	}
+
+	// counts: ((key * 4 + direction) * 65536 + neighbor key) -> count
+	const counts = new Map();
 	const count = (key, direction, neighbor) => {
-		if (key == null || neighbor == null)
-			return;
-		let entry = counts.get(key);
-		if (!entry)
-			counts.set(key, entry = [new Map(), new Map(), new Map(), new Map()]);
-		entry[direction].set(neighbor, (entry[direction].get(neighbor) ?? 0) + 1);
+		const id = (key * 4 + direction) * 65536 + neighbor;
+		counts.set(id, (counts.get(id) ?? 0) + 1);
 	};
-	const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+	const maps = maps2D.filter(map => map.TilesetOrLabdataIndex === tilesetIndex && map.Tiles);
+	const totalCells = maps.reduce((sum, map) => sum + map.Width * map.Height, 0);
+	// Large tilesets (world maps) are sampled: the most common neighbors are clear long before all maps are counted.
+	const step = Math.max(1, Math.ceil(totalCells / maxCells));
 
-	for (const map of maps2D) {
-		if (map.TilesetOrLabdataIndex !== tilesetIndex || !map.Tiles)
-			continue;
+	for (let m = 0; m < maps.length; m += step) {
+		const map = maps[m];
+		const width = map.Width, height = map.Height;
 
-		for (let x = 0; x < map.Width; ++x) {
-			for (let y = 0; y < map.Height; ++y) {
-				const tile = map.Tiles[x][y];
+		for (const layerName of ['BackTileIndex', 'FrontTileIndex']) {
+			const keys = new Int32Array(width * height);
 
-				for (const layerName of ['BackTileIndex', 'FrontTileIndex']) {
-					const key = graphicKey(tile[layerName]);
+			for (let x = 0; x < width; ++x) {
+				const column = map.Tiles[x];
 
-					if (key == null)
+				for (let y = 0; y < height; ++y) {
+					const tileIndex = column[y][layerName];
+					keys[y * width + x] = tileIndex > 0 && tileIndex < tileKeys.length ? tileKeys[tileIndex] : -1;
+				}
+			}
+
+			for (let y = 0; y < height; ++y) {
+				for (let x = 0; x < width; ++x) {
+					const key = keys[y * width + x];
+
+					if (key < 0)
 						continue;
 
-					directions.forEach(([dx, dy], direction) => {
-						const nx = x + dx, ny = y + dy;
-						if (nx >= 0 && ny >= 0 && nx < map.Width && ny < map.Height)
-							count(key, direction, graphicKey(map.Tiles[nx][ny][layerName]));
-					});
+					if (x + 1 < width && keys[y * width + x + 1] >= 0) {
+						count(key, 1, keys[y * width + x + 1]); // right
+						count(keys[y * width + x + 1], 0, key); // left of the right neighbor
+					}
+
+					if (y + 1 < height && keys[(y + 1) * width + x] >= 0) {
+						count(key, 3, keys[(y + 1) * width + x]); // bottom
+						count(keys[(y + 1) * width + x], 2, key); // top of the bottom neighbor
+					}
 				}
 			}
 		}
 	}
 
+	// most common neighbor per key and direction
+	const best = new Map(); // key * 4 + direction -> [neighbor, count]
+
+	for (const [id, n] of counts) {
+		const keyDirection = Math.floor(id / 65536);
+		const neighbor = id - keyDirection * 65536;
+		const current = best.get(keyDirection);
+
+		if (current == null || n > current[1])
+			best.set(keyDirection, [neighbor, n]);
+	}
+
 	const result = new Map();
 
-	for (const [key, entry] of counts)
-		result.set(key, entry.map(neighbors => neighbors.size === 0 ? null : [...neighbors].reduce((a, b) => b[1] > a[1] ? b : a)[0]));
+	for (const [keyDirection, [neighbor]] of best) {
+		const key = keyDirection >> 2;
+		let entry = result.get(key);
+
+		if (!entry)
+			result.set(key, entry = [null, null, null, null]);
+
+		entry[keyDirection & 3] = neighbor;
+	}
 
 	// animation frames (following graphics) have the neighbors of the first frame
-	for (const tile of tileset.Tiles) {
+	for (const tile of tiles) {
 		const key = tile.GraphicIndex - 1;
 
 		if (tile.NumAnimationFrames > 1 && result.has(key)) {

@@ -446,8 +446,19 @@ export class HDAtlasTexture extends Texture {
 		this.SourceWidth = width;
 		this.SourceHeight = height;
 		this.SourceData = data;
-		this.Regions = regions;
+		this.regions = typeof regions === 'function' ? null : regions;
+		this.regionsFactory = typeof regions === 'function' ? regions : null;
 		this.Upscaled = false;
+	}
+
+	/** Upscaler regions (created on first use, see createHDAtlas) */
+	get Regions() {
+		if (this.regions == null && this.regionsFactory != null) {
+			this.regions = this.regionsFactory();
+			this.regionsFactory = null;
+		}
+
+		return this.regions ?? [];
 	}
 
 	get NeedsUpscale() { return !this.Upscaled && !this.disposed; }
@@ -548,53 +559,65 @@ function createHDAtlas(state, textures, options) {
 		return null; // not possible -> caller uses the original atlas
 
 	const data = new Uint8Array(width * height);
-	const regions = [];
 	const scaledOffsets = new Map();
 
 	for (const [key, offset] of layout.offsets) {
 		const graphic = textures.get(key);
 		const graphicWidth = graphic.Width;
-		const graphicHeight = graphic.Height;
 
-		for (let y = 0; y < graphicHeight; ++y)
+		for (let y = 0; y < graphic.Height; ++y)
 			data.set(graphic.Data.subarray(y * graphicWidth, (y + 1) * graphicWidth), (offset.Y + y) * width + offset.X);
 
 		scaledOffsets.set(key, new Position(offset.X * factor, offset.Y * factor));
-
-		if (graphicWidth === 0 || graphicHeight === 0)
-			continue;
-
-		const info = options.regionInfo?.(key, graphic) ?? {};
-		const flags = (info.flags ?? 0) | (graphic.HDFlags ?? 0);
-		const palette = graphic.HDPalette ?? info.palette ?? 0;
-		let frameWidth = graphic.FrameWidth ?? info.frameWidth ?? graphicWidth;
-		let frameHeight = graphic.FrameHeight ?? info.frameHeight ?? graphicHeight;
-
-		if (!(frameWidth > 0) || graphicWidth % frameWidth !== 0)
-			frameWidth = graphicWidth;
-		if (!(frameHeight > 0) || graphicHeight % frameHeight !== 0)
-			frameHeight = graphicHeight;
-
-		for (let fy = 0; fy < graphicHeight; fy += frameHeight) {
-			for (let fx = 0; fx < graphicWidth; fx += frameWidth)
-				regions.push({ x: offset.X + fx, y: offset.Y + fy, width: frameWidth, height: frameHeight, flags, palette });
-		}
-
-		// Neighbor graphics (keys [left, right, top, bottom], e.g. the most common neighbor tiles on the maps):
-		// the upscaler reads the pixels outside of the graphic from them instead of repeating the border pixels.
-		if (info.neighbors != null && frameWidth === graphicWidth && frameHeight === graphicHeight) {
-			const neighbors = info.neighbors.map(neighborKey => {
-				const neighbor = neighborKey == null ? null : textures.get(neighborKey);
-				const neighborOffset = neighbor == null ? null : layout.offsets.get(neighborKey);
-
-				return neighborOffset != null && neighbor.Width === graphicWidth && neighbor.Height === graphicHeight
-					? [neighborOffset.X, neighborOffset.Y] : [-1, -1];
-			});
-			regions[regions.length - 1].neighbors = neighbors.flat();
-		}
 	}
 
-	const texture = new HDAtlasTexture(state, width, height, factor, data, regions);
+	// The upscaler regions are determined when the atlas is upscaled for the first time (the region infos may need
+	// some work like the neighbor tiles of the map tiles, which is only done for the tilesets which are used).
+	const regionsFactory = () => {
+		const regions = [];
+
+		for (const [key, offset] of layout.offsets) {
+			const graphic = textures.get(key);
+			const graphicWidth = graphic.Width;
+			const graphicHeight = graphic.Height;
+
+			if (graphicWidth === 0 || graphicHeight === 0)
+				continue;
+
+			const info = options.regionInfo?.(key, graphic) ?? {};
+			const flags = (info.flags ?? 0) | (graphic.HDFlags ?? 0);
+			const palette = graphic.HDPalette ?? info.palette ?? 0;
+			let frameWidth = graphic.FrameWidth ?? info.frameWidth ?? graphicWidth;
+			let frameHeight = graphic.FrameHeight ?? info.frameHeight ?? graphicHeight;
+
+			if (!(frameWidth > 0) || graphicWidth % frameWidth !== 0)
+				frameWidth = graphicWidth;
+			if (!(frameHeight > 0) || graphicHeight % frameHeight !== 0)
+				frameHeight = graphicHeight;
+
+			for (let fy = 0; fy < graphicHeight; fy += frameHeight) {
+				for (let fx = 0; fx < graphicWidth; fx += frameWidth)
+					regions.push({ x: offset.X + fx, y: offset.Y + fy, width: frameWidth, height: frameHeight, flags, palette });
+			}
+
+			// Neighbor graphics (keys [left, right, top, bottom], e.g. the most common neighbor tiles on the maps):
+			// the upscaler reads the pixels outside of the graphic from them instead of repeating the border pixels.
+			if (info.neighbors != null && frameWidth === graphicWidth && frameHeight === graphicHeight) {
+				const neighbors = info.neighbors.map(neighborKey => {
+					const neighbor = neighborKey == null ? null : textures.get(neighborKey);
+					const neighborOffset = neighbor == null ? null : layout.offsets.get(neighborKey);
+
+					return neighborOffset != null && neighbor.Width === graphicWidth && neighbor.Height === graphicHeight
+						? [neighborOffset.X, neighborOffset.Y] : [-1, -1];
+				});
+				regions[regions.length - 1].neighbors = neighbors.flat();
+			}
+		}
+
+		return regions;
+	};
+
+	const texture = new HDAtlasTexture(state, width, height, factor, data, regionsFactory);
 	const atlas = new TextureAtlas(texture, scaledOffsets);
 	atlas.TextureFactor = factor;
 	return atlas;
