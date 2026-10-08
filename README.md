@@ -29,7 +29,14 @@ The original game data (abandonware) is included in `data/Ambermoon/` (Amiga `Am
 `data/Amberstar/` (Amiga `Amberfiles` of Amberstar, English 1.96, with `_new/` containing the fresh new-game files).
 Savegames and settings are stored in the browser (IndexedDB).
 
-URL parameters: `ambermoon.html?skipintro`, `?mute` (no sound; also `localStorage['amber-web-mute'] = '1'`).
+URL parameters: `ambermoon.html?skipintro`, `?mute` (no sound; also `localStorage['amber-web-mute'] = '1'`),
+`?hd=0` / `?hd=1` (original / HD graphics).
+
+HD graphics (default, option "HD graphics" on the last options page, needs a restart): all graphics (UI, portraits,
+items, tiles, characters, monsters, battle backgrounds and effects, 3D textures, intro) are upscaled 4x on the GPU
+when they are used first, with an index preserving pixel art scaler (`Ambermoon.Renderer.OpenGL/PixelArtUpscaler.js`,
+settings per layer in `src/host/hdGraphics.js`). The palettes, palette effects and the 320x200 layout stay the same,
+the graphics just get 4x more detail and smooth edges at Full HD and above.
 
 Keys (as in Ambermoon.net): F8/F9 graphic filter/overlay, F10 effects, Ctrl+M music on/off, F1-F6 inventories,
 numpad/arrows/WASD movement, Esc options.
