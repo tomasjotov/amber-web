@@ -10,6 +10,13 @@ import { GameCore } from '../GameCore.js';
 import { Layer } from './Layer.js';
 import { Graphics } from './Graphics.js';
 
+/** Web port: options of the HD graphics upscaler per graphic (see Ambermoon.Renderer.OpenGL/PixelArtUpscaler.js) */
+export const UpscaleFlags = Object.freeze({
+	WrapX: 1, // neighbors outside the graphic wrap around horizontally (tileable textures)
+	WrapY: 2, // neighbors outside the graphic wrap around vertically
+	Opaque: 4 // color index 0 is a normal color (opaque layers), otherwise it is transparent
+});
+
 let instance = null;
 let factory = null;
 let converter = null;
@@ -61,7 +68,11 @@ export class TextureAtlasManager {
 			if (!found)
 				return null; // no texture for this layer
 
-			if (layer === Layer.BattleMonsterRow)
+			const hdAtlas = this.CreateHDAtlas(layer, value);
+
+			if (hdAtlas != null)
+				this.atlas.set(layer, hdAtlas);
+			else if (layer === Layer.BattleMonsterRow)
 				this.atlas.set(layer, value.Create(1));
 			else if (layer === Layer.Images || layer === Layer.MobileOverlays)
 				this.atlas.set(layer, getValue(this.atlasBuilders, layer).Create(4));
@@ -107,14 +118,98 @@ export class TextureAtlasManager {
 		this.AddAtlases(layer, toDictionary(atlases, a => a.Offset, a => a.Atlas));
 	}
 
-	static CreateFromGraphics(graphics, bytesPerPixel) {
+	/**
+	 * Web port: hdLayer (optional) is the layer the atlas is used for. If the HD graphics mode is active for this layer,
+	 * an upscaled atlas is created (regionInfo: optional (key, graphic) => { flags, palette } for the upscaler).
+	 */
+	static CreateFromGraphics(graphics, bytesPerPixel, hdLayer = null, regionInfo = null) {
 		const builder = factory.Create();
 
 		for (const [Key, Value] of graphics)
 			builder.AddTexture(Key, Value);
 
+		if (hdLayer != null && bytesPerPixel === 1) {
+			const hdAtlas = TextureAtlasManager.CreateHDAtlasFromBuilder(hdLayer, builder, 'packed', regionInfo);
+
+			if (hdAtlas != null)
+				return hdAtlas;
+		}
+
 		return builder.Create(bytesPerPixel);
 	}
+
+	// #region Web port: HD graphics
+
+	/**
+	 * HD graphics settings (set by the host before the render view is created, null = original graphics):
+	 * {
+	 *   Factor: 4,                     // upscaling factor (2 or 4)
+	 *   MaxTextureSize: 16384,         // GL limit
+	 *   Layers: Map<Layer, {           // layers with upscaled graphics
+	 *     layout?: 'sequential' | 'packed' | 'shelf',
+	 *     regionInfo?: (key, graphic) => ({ flags, palette, frameWidth })
+	 *   }>
+	 * }
+	 */
+	static HD = null;
+
+	/** The texture factor of the given layer in HD mode (1 if the layer uses the original graphics). */
+	static GetHDFactor(layer) {
+		const hd = TextureAtlasManager.HD;
+
+		return hd != null && hd.Factor > 1 && hd.Layers?.has(layer) ? hd.Factor : 1;
+	}
+
+	static CreateHDAtlasFromBuilder(layer, builder, defaultLayout, regionInfo = null) {
+		const hd = TextureAtlasManager.HD;
+		const settings = hd?.Layers?.get(layer);
+
+		if (settings == null || !(hd.Factor > 1) || typeof builder.CreateHD !== 'function')
+			return null;
+
+		const options = {
+			factor: hd.Factor,
+			maxTextureSize: hd.MaxTextureSize ?? 16384,
+			layout: settings.layout ?? defaultLayout,
+			maxWidth: 320,
+			regionInfo: (key, graphic) => regionInfo?.(key, graphic) ?? settings.regionInfo?.(key, graphic) ?? null
+		};
+		let atlas = builder.CreateHD(options);
+
+		if (atlas == null && options.layout !== 'shelf')
+			atlas = builder.CreateHD({ ...options, layout: 'shelf' });
+
+		if (atlas == null)
+			console.warn(`HD graphics: the atlas of layer ${enumName(Layer, layer)} is too large.`);
+
+		return atlas;
+	}
+
+	CreateHDAtlas(layer, builder) {
+		if (TextureAtlasManager.GetHDFactor(layer) <= 1)
+			return null;
+
+		// The tileset graphics are added to the background and the foreground layers: share the upscaled texture.
+		if (layer >= Layer.MapForeground1 && layer <= Layer.MapForeground10) {
+			const backgroundLayer = Layer.MapBackground1 + layer - Layer.MapForeground1;
+			const backgroundBuilder = this.atlasBuilders.get(backgroundLayer);
+
+			if (backgroundBuilder != null && TextureAtlasManager.GetHDFactor(backgroundLayer) === TextureAtlasManager.GetHDFactor(layer)) {
+				const foregroundTextures = builder.Textures;
+				const backgroundTextures = backgroundBuilder.Textures;
+
+				if (foregroundTextures != null && backgroundTextures != null && foregroundTextures.size === backgroundTextures.size &&
+					[...foregroundTextures].every(([key, graphic]) => backgroundTextures.get(key) === graphic))
+					return this.GetOrCreate(backgroundLayer);
+			}
+		}
+
+		const defaultLayout = layer === Layer.BattleMonsterRow ? 'packed' : 'sequential';
+
+		return TextureAtlasManager.CreateHDAtlasFromBuilder(layer, builder, defaultLayout);
+	}
+
+	// #endregion
 
 	static CreatePalette(paletteProvider, ...additionalPalettes) {
 		const paletteBuilder = factory.Create();

@@ -30,7 +30,7 @@ import { Color } from './Color.js';
 import { Layer } from './Layer.js';
 import { SurfaceType, WallOrientation } from './ISurface3D.js';
 import { TextAlign } from './TextAlign.js';
-import { TextureAtlasManager } from './TextureAtlasManager.js';
+import { TextureAtlasManager, UpscaleFlags } from './TextureAtlasManager.js';
 import { Player3D } from './Player3D.js';
 import { Character3D } from './Character3D.js';
 
@@ -81,9 +81,9 @@ class MapObject {
 				frame %= this.numFrames;
 		}
 
-		// TODO: If this layer is scaled, this won't work anymore.
+		// Web port: the atlas offset is in texture pixels (HD graphics: scaled atlas)
 		this.surface.TextureAtlasOffset = Position.op_Addition(this.map.GetObjectTextureOffset(this.objectIndex),
-			new Position(Math.trunc(frame * this.surface.TextureWidth), 0));
+			new Position(Math.trunc(frame * this.surface.TextureWidth) * this.map.TextureFactor, 0));
 	}
 }
 
@@ -196,9 +196,9 @@ class MapCharacter {
 	ResetFrame() {
 		const frame = Math.trunc(this.numFrames / 2);
 
-		// TODO: If this layer is scaled, this won't work anymore.
+		// Web port: the atlas offset is in texture pixels (HD graphics: scaled atlas)
 		this.surface.TextureAtlasOffset = Position.op_Addition(this.map.GetObjectTextureOffset(this.textureIndex),
-			new Position(Math.trunc(frame * this.surface.TextureWidth), 0));
+			new Position(Math.trunc(frame * this.surface.TextureWidth) * this.map.TextureFactor, 0));
 	}
 
 	static GetDistance(x1, y1, x2, y2) {
@@ -438,9 +438,9 @@ class MapCharacter {
 						frame %= this.numFrames;
 				}
 
-				// TODO: If this layer is scaled, this won't work anymore.
+				// Web port: the atlas offset is in texture pixels (HD graphics: scaled atlas)
 				this.surface.TextureAtlasOffset = Position.op_Addition(this.map.GetObjectTextureOffset(this.textureIndex),
-					new Position(Math.trunc(frame * this.surface.TextureWidth), 0));
+					new Position(Math.trunc(frame * this.surface.TextureWidth) * this.map.TextureFactor, 0));
 			}
 		}
 
@@ -1105,6 +1105,8 @@ export class RenderMap3D {
 				graphics.set(key, graphic);
 			};
 
+			const objectFrameWidths = new globalThis.Map(); // web port: HD graphics (objects are upscaled frame by frame)
+
 			for (const obj of labdata.Objects) {
 				for (const subObj of obj.SubObjects) {
 					const graphic = labdata.ObjectGraphics[labdata.ObjectInfos.indexOf(subObj.Object)];
@@ -1112,8 +1114,10 @@ export class RenderMap3D {
 					// Note: If the same texture is used multiple times but with different amount of frames
 					// we want to use the graphic with the most frames (highest width) to support all use cases.
 					const [found, existingGraphic] = tryGetValue(graphics, subObj.Object.TextureIndex);
-					if (!found || graphic.Width > existingGraphic.Width)
+					if (!found || graphic.Width > existingGraphic.Width) {
 						graphics.set(subObj.Object.TextureIndex, graphic);
+						objectFrameWidths.set(subObj.Object.TextureIndex, subObj.Object.TextureWidth);
+					}
 				}
 			}
 			for (let i = 0; i < labdata.WallGraphics.length; ++i)
@@ -1125,7 +1129,15 @@ export class RenderMap3D {
 
 			addGraphic(10002, RenderMap3D.labBackgroundGraphics[Map.LabyrinthBackgroundIndex > 0 && Map.LabyrinthBackgroundIndex <= RenderMap3D.labBackgroundGraphics.length ? Map.LabyrinthBackgroundIndex - 1 : Map.World]); // web port: per-map horizon (Amberstar)
 
-			RenderMap3D.labdataTextures.set(Map.TilesetOrLabdataIndex, TextureAtlasManager.CreateFromGraphics(graphics, 1));
+			// Web port: HD graphics. Walls repeat horizontally, floor and ceiling in both directions, the horizon horizontally.
+			const paletteIndex = Math.max(0, Map.PaletteIndex - 1);
+			const regionInfo = key => key >= 10000
+				? { flags: key === 10002 ? UpscaleFlags.WrapX : UpscaleFlags.WrapX | UpscaleFlags.WrapY, palette: paletteIndex }
+				: key >= 1000
+					? { flags: UpscaleFlags.WrapX, palette: paletteIndex }
+					: { flags: 0, palette: paletteIndex, frameWidth: objectFrameWidths.get(key) };
+
+			RenderMap3D.labdataTextures.set(Map.TilesetOrLabdataIndex, TextureAtlasManager.CreateFromGraphics(graphics, 1, Layer.Map3D, regionInfo));
 		}
 
 		this.textureAtlas = getValue(RenderMap3D.labdataTextures, Map.TilesetOrLabdataIndex);
@@ -1135,6 +1147,9 @@ export class RenderMap3D {
 		renderView.GetLayer(Layer.Map3D).Texture = this.textureAtlas.Texture;
 		renderView.GetLayer(Layer.Billboards3D).Texture = this.textureAtlas.Texture;
 	}
+
+	/** Web port: texture factor of the labdata atlas (HD graphics) */
+	get TextureFactor() { return Math.trunc(this.textureAtlas?.TextureFactor ?? 1); }
 
 	GetObjectTextureOffset(objectIndex) {
 		return this.textureAtlas.GetOffset(objectIndex);

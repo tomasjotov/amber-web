@@ -15,6 +15,9 @@ function config(values) {
 }
 
 export class RenderLayer {
+	/** Web port: smooth (anti-aliased) sampling of the upscaled textures of the HD graphics mode */
+	static HDSmoothing = true;
+
 	static DefaultLayerConfigs = new Map([
 		[Layer.Map3DBackground, config({
 			BaseZ: 0.00,
@@ -353,6 +356,15 @@ export class RenderLayer {
 
 		this.Config = this.Config.With({ TextureFactor: factor });
 		this.RenderBuffer.SetTextureFactor(factor);
+		this.renderBufferSemiTransparent?.SetTextureFactor(factor); // web port
+	}
+
+	/** Web port: true if textured render nodes were ever added to this layer (used to upscale HD textures on demand). */
+	get HasContent() {
+		const buffer = this.RenderBuffer;
+
+		return (buffer?.positionBuffer?.Size ?? 0) > 0 || (buffer?.vectorBuffer?.Size ?? 0) > 0 ||
+			(this.renderBufferSemiTransparent?.positionBuffer?.Size ?? 0) > 0;
 	}
 
 	/** Binds the layer texture to unit 0 and the palette to unit 1 (code shared by all textured layers). */
@@ -462,6 +474,8 @@ export class RenderLayer {
 					shader.UsePalette(Config.UsePalette);
 					shader.SetPaletteCount(this.palette.Height);
 					shader.UpdateMatrices(state);
+					// web port: smooth sampling of upscaled (HD) graphics
+					shader.SetHDSmooth?.(RenderLayer.HDSmoothing && Config.TextureFactor > 1 && !sky && texture.Upscaled !== false);
 
 					this.bindTextures(shader, texture, true);
 					shader.SetZ(Config.BaseZ);

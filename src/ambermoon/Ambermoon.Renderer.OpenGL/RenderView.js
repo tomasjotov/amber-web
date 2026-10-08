@@ -45,7 +45,8 @@ import { ScreenRenderBuffer } from './ScreenRenderBuffer.js';
 import { RenderLayer, RenderLayerFactory } from './RenderLayer.js';
 import { SpriteFactory } from './Sprite.js';
 import { ColoredRectFactory } from './ColoredRect.js';
-import { TextureAtlasBuilderFactory } from './TextureAtlas.js';
+import { TextureAtlasBuilderFactory, HDAtlasTexture } from './TextureAtlas.js';
+import { PixelArtUpscaler } from './PixelArtUpscaler.js';
 import { Matrix4 } from './Matrix.js';
 import { Camera3D } from './Camera3D.js';
 import { Surface3DFactory } from './Surface3D.js';
@@ -170,6 +171,12 @@ export class RenderView extends RenderLayerFactory {
 
 		const textureAtlasManager = textureAtlasManagerProvider();
 		const palette = TextureAtlasManager.CreatePalette(paletteProvider, ...(additionalPalettes ?? []));
+		// Web port: upscaler of the HD graphics mode (HD atlases are upscaled on the GPU when they are used first)
+		this.hdUpscaler = new PixelArtUpscaler(this.State, palette);
+		this.hdTextures = new Set();
+
+		if (TextureAtlasManager.HD != null)
+			this.hdUpscaler.Prepare(); // compile the shaders in the background
 
 		const Set320x256View = (renderLayer) => {
 			// To keep the aspect ration of 16:10 we use a virtual screen of 409,6 x 256.
@@ -192,8 +199,16 @@ export class RenderView extends RenderLayerFactory {
 				continue;
 
 			try {
-				const texture = textureAtlasManager.GetOrCreate(layer)?.Texture ?? null;
+				const textureAtlas = textureAtlasManager.GetOrCreate(layer);
+				const texture = textureAtlas?.Texture ?? null;
 				const renderLayer = this.Create(layer, texture, palette);
+
+				// Web port: HD graphics. Atlases are upscaled, so the texture coordinates are scaled by the texture factor.
+				// Layers whose atlases are created later (3D, monsters, outro, ...) get the factor of the HD settings.
+				const textureFactor = textureAtlas != null ? (textureAtlas.TextureFactor ?? 1) : TextureAtlasManager.GetHDFactor(layer);
+
+				if (textureFactor > 1)
+					renderLayer.SetTextureFactor(textureFactor);
 
 				if (layer !== Layer.Map3DBackground && layer !== Layer.Map3DBackgroundFog && layer !== Layer.Map3DCeiling && layer !== Layer.Map3D && layer !== Layer.Billboards3D)
 					renderLayer.Visible = true;
@@ -549,6 +564,8 @@ export class RenderView extends RenderLayerFactory {
 		const gl = State.Gl;
 		const frameBufferSize = this.frameBufferSize;
 
+		this.EnsureHDTextures();
+
 		try {
 			this.context.SetRotation(this.rotation);
 
@@ -720,6 +737,48 @@ export class RenderView extends RenderLayerFactory {
 		}
 
 		this.ReadScreenshot();
+	}
+
+	/**
+	 * Web port: HD graphics. Upscales the HD atlases of all layers which are about to be drawn (once) and frees the
+	 * upscaled textures which are no longer used by any layer (e.g. the 3D textures of a previous labyrinth).
+	 */
+	EnsureHDTextures() {
+		if (this.hdUpscaler == null)
+			return;
+
+		let referenced = null;
+
+		for (const layer of this.layers.values()) {
+			const texture = layer.Texture;
+
+			if (!(texture instanceof HDAtlasTexture))
+				continue;
+
+			(referenced ??= new Set()).add(texture);
+
+			if (texture.NeedsUpscale && layer.Visible && layer.HasContent) {
+				texture.Upscale(this.hdUpscaler);
+				this.hdTextures.add(texture);
+			}
+		}
+
+		for (const texture of this.hdTextures) {
+			if (!referenced?.has(texture)) {
+				texture.ReleaseHD();
+				this.hdTextures.delete(texture);
+			}
+		}
+	}
+
+	/** Web port: statistics of the HD graphics mode (upscaled textures, GPU memory, upscaling time). */
+	get HDStats() {
+		let bytes = 0;
+
+		for (const texture of this.hdTextures)
+			bytes += texture.Upscaled ? texture.ByteSize : 0;
+
+		return { textures: this.hdTextures.size, megabytes: bytes / (1024 * 1024), ...this.hdUpscaler?.Stats };
 	}
 
 	RenderToScreen(viewOffset, useEffects) {

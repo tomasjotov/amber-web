@@ -88,6 +88,8 @@ export class RenderBuffer {
 		this.extrudeBuffer = null;
 		this.centerBuffer = null;
 		this.radiusBuffer = null;
+		this.textureRectMinBuffer = null; // web port
+		this.textureRectMaxBuffer = null; // web port
 
 		this.state = state;
 		this.textureFactor = textureFactor;
@@ -197,6 +199,13 @@ export class RenderBuffer {
 				this.maskColorBuffer = new ByteBuffer(state, !supportAnimations);
 
 				this.vertexArrayObject.AddBuffer(TextureShader.DefaultMaskColorIndexName, this.maskColorBuffer);
+
+				// Web port: texture rectangle of each sprite (HD graphics: smooth sampling must not read texels of other graphics)
+				this.textureRectMinBuffer = new PositionBuffer(state, !supportAnimations);
+				this.textureRectMaxBuffer = new PositionBuffer(state, !supportAnimations);
+
+				this.vertexArrayObject.AddBuffer(TextureShader.DefaultTexRectMinName, this.textureRectMinBuffer);
+				this.vertexArrayObject.AddBuffer(TextureShader.DefaultTexRectMaxName, this.textureRectMaxBuffer);
 			}
 
 			if (layered || isText) {
@@ -380,6 +389,9 @@ export class RenderBuffer {
 		const textureSize = new Size(sprite.TextureSize ?? spriteSize);
 
 		if (sprite.ClipArea != null) {
+			// Web port: the atlas offset is given in texture pixels, so clipped offsets are scaled by the texture factor
+			// (sizes are in game pixels and are multiplied by the texture factor later).
+			const textureFactor = Math.trunc(this.textureFactor);
 			const textureWidthFactor = Math.fround(spriteSize.Width / textureSize.Width);
 			const textureHeightFactor = Math.fround(spriteSize.Height / textureSize.Height);
 			const oldX = position.X;
@@ -387,16 +399,16 @@ export class RenderBuffer {
 			const oldWidth = spriteSize.Width;
 			const oldHeight = spriteSize.Height;
 			sprite.ClipArea.ClipRect(position, spriteSize);
-			textureAtlasOffset.Y += Util.Round((position.Y - oldY) / textureHeightFactor);
+			textureAtlasOffset.Y += textureFactor * Util.Round((position.Y - oldY) / textureHeightFactor);
 			textureSize.Width -= Util.Round((oldWidth - spriteSize.Width) / textureWidthFactor);
 			textureSize.Height -= Util.Round((oldHeight - spriteSize.Height) / textureHeightFactor);
 
 			if (sprite.MirrorX) {
 				const oldRight = oldX + oldWidth;
 				const newRight = position.X + spriteSize.Width;
-				textureAtlasOffset.X += Util.Round((oldRight - newRight) / textureWidthFactor);
+				textureAtlasOffset.X += textureFactor * Util.Round((oldRight - newRight) / textureWidthFactor);
 			} else {
-				textureAtlasOffset.X += Util.Round((position.X - oldX) / textureWidthFactor);
+				textureAtlasOffset.X += textureFactor * Util.Round((position.X - oldX) / textureWidthFactor);
 			}
 		}
 
@@ -446,6 +458,8 @@ export class RenderBuffer {
 				buffer.Add(toShort(textureAtlasOffset.X + textureSize.Width), toShort(textureAtlasOffset.Y + textureSize.Height), textureAtlasOffsetBufferIndex + 2);
 				buffer.Add(toShort(textureAtlasOffset.X), toShort(textureAtlasOffset.Y + textureSize.Height), textureAtlasOffsetBufferIndex + 3);
 			}
+
+			this.setTextureRect(index, textureAtlasOffset, textureSize, true);
 		}
 
 		if (this.baseLineBuffer != null) {
@@ -838,6 +852,30 @@ export class RenderBuffer {
 			buffer.Update(index + 2, toShort(textureAtlasOffset.X + textureSize.Width), toShort(textureAtlasOffset.Y + textureSize.Height));
 			buffer.Update(index + 3, toShort(textureAtlasOffset.X), toShort(textureAtlasOffset.Y + textureSize.Height));
 		}
+
+		this.setTextureRect(index, textureAtlasOffset, textureSize, false);
+	}
+
+	/**
+	 * Web port: stores the texture rectangle (in texture pixels, textureSize is already multiplied by the texture factor)
+	 * of a sprite for all 4 vertices (used by the smooth sampling of HD graphics).
+	 */
+	setTextureRect(index, textureAtlasOffset, textureSize, add) {
+		if (this.textureRectMinBuffer == null)
+			return;
+
+		const x0 = toShort(textureAtlasOffset.X), y0 = toShort(textureAtlasOffset.Y);
+		const x1 = toShort(textureAtlasOffset.X + textureSize.Width), y1 = toShort(textureAtlasOffset.Y + textureSize.Height);
+
+		for (let i = 0; i < 4; ++i) {
+			if (add) {
+				this.textureRectMinBuffer.Add(x0, y0, index + i);
+				this.textureRectMaxBuffer.Add(x1, y1, index + i);
+			} else {
+				this.textureRectMinBuffer.Update(index + i, x0, y0);
+				this.textureRectMaxBuffer.Update(index + i, x1, y1);
+			}
+		}
 	}
 
 	/** C# overload UpdateTextureAtlasOffset(int index, ISurface3D surface) */
@@ -1006,6 +1044,8 @@ export class RenderBuffer {
 			this.extrudeBuffer?.Remove(index + i);
 			this.centerBuffer?.Remove(index + i);
 			this.radiusBuffer?.Remove(index + i);
+			this.textureRectMinBuffer?.Remove(index + i);
+			this.textureRectMaxBuffer?.Remove(index + i);
 		}
 
 		// TODO: this code causes problems. commented out for now
@@ -1084,6 +1124,8 @@ export class RenderBuffer {
 			this.textureAtlasOffsetBuffer?.Dispose();
 			this.textureEndCoordBuffer?.Dispose();
 			this.textureSizeBuffer?.Dispose();
+			this.textureRectMinBuffer?.Dispose();
+			this.textureRectMaxBuffer?.Dispose();
 			this.vectorBuffer?.Dispose();
 
 			this.indexBuffer?.Dispose();
