@@ -39,6 +39,8 @@ import { MusicManager } from '../ambermoon/Ambermoon.net/MusicManager.js';
 import { AudioOutput } from '../ambermoon/Ambermoon.net/AudioOutput.js';
 import { RemakeSavegameManager } from '../ambermoon/Ambermoon.net/RemakeSavegameManager.js';
 import { PersistentStorage } from './storage.js';
+import { CreateHDSettings } from './hdGraphics.js';
+import { PixelArtUpscaler } from '../ambermoon/Ambermoon.Renderer.OpenGL/PixelArtUpscaler.js';
 
 const KeyMap = {
 	ArrowLeft: Key.Left, ArrowRight: Key.Right, ArrowUp: Key.Up, ArrowDown: Key.Down, Escape: Key.Escape,
@@ -112,6 +114,18 @@ const yieldToBrowser = () => new Promise(resolve => {
 
 export class AmbermoonHost {
 	static get muted() { return isMuted(); }
+
+	/** HD graphics (Configuration.HDGraphics, default on). The URL parameter ?hd=0 / ?hd=1 overrides it. */
+	static hdGraphicsEnabled(configuration) {
+		try {
+			const value = new URLSearchParams(location.search).get('hd');
+			if (value != null)
+				return value !== '0' && value !== 'false' && value !== 'off';
+		} catch {
+			// ignore
+		}
+		return configuration.HDGraphics !== false;
+	}
 
 	constructor(canvas, options = {}) {
 		this.canvas = canvas;
@@ -231,12 +245,25 @@ export class AmbermoonHost {
 		const anyIntroActive = () => this.fantasyIntro != null;
 		this.#updateCanvasSize();
 		const contextProvider = CreateContextProvider(this.canvas, 'ambermoon');
+		// HD graphics: all graphics are upscaled 4x (palette preserving pixel art upscaler), see hdGraphics.js
+		this.hdGraphics = AmbermoonHost.hdGraphicsEnabled(configuration);
+		try { // debug: ?hdsalt=x forces a new compilation of the upscaler shaders (measures the uncached compile time)
+			const salt = new URLSearchParams(location.search).get('hdsalt');
+			if (salt)
+				PixelArtUpscaler.ShaderSalt = '\n// ' + salt;
+		} catch {
+			// ignore
+		}
+		TextureAtlasManager.HD = this.hdGraphics
+			? CreateHDSettings(gameData, contextProvider.gl.getParameter(contextProvider.gl.MAX_TEXTURE_SIZE))
+			: null;
 		const useFrameBuffer = { value: true };
 		const useEffects = { value: configuration.Effects !== Effects.None };
 		const renderView = new GameRenderView(contextProvider, gameData, graphicInfoProvider, fontProvider,
 			new TextProcessor(fontProvider.GetFont().GlyphCount), textureAtlasManagerProvider, this.canvas.width, this.canvas.height,
 			this.windowSize, useFrameBuffer, useEffects,
-			() => ({ Key: anyIntroActive() ? 0 : configuration.GraphicFilter, Value: anyIntroActive() ? 0 : configuration.GraphicFilterOverlay }),
+			// HD graphics: the graphics are already upscaled, so the screen space pixel art filter (xBR) is not used on top
+			() => ({ Key: anyIntroActive() || (this.hdGraphics && configuration.GraphicFilter === GraphicFilter.PixelArt) ? 0 : configuration.GraphicFilter, Value: anyIntroActive() ? 0 : configuration.GraphicFilterOverlay }),
 			() => anyIntroActive() ? 0 : configuration.Effects,
 			additionalPalettes);
 		if (!useFrameBuffer.value) {
@@ -352,6 +379,8 @@ export class AmbermoonHost {
 					new OutroFactory(renderView, outroData, outroFont, outroFontLarge), features,
 					'Saves', 'Ambermoon.net (web)', null, savegameManager);
 				game.QuitRequested.add(() => location.reload());
+				// The options (e.g. HD graphics) are stored when they are changed (GameWindow.cs saves them on exit)
+				game.ConfigurationChanged?.add(() => configuration.RequestSave());
 				game.Run(continueGame, this.mousePosition);
 				return game;
 			};

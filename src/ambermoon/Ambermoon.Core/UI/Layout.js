@@ -510,7 +510,8 @@ function GetOptionNames() {
 				'Info beim Speichern/Laden',
 				'Cheats aktivieren',
 				'Auto-Kampf',
-				'3D-Grafik verbessert' // web port
+				'3D-Grafik verbessert', // web port
+				'HD-Grafik (Neustart)' // web port
 			]
 		],
 		[
@@ -544,7 +545,8 @@ function GetOptionNames() {
 				'Show save/load info',
 				'Enable cheats',
 				'Auto-Battle',
-				'Enhanced 3D graphics' // web port
+				'Enhanced 3D graphics', // web port
+				'HD graphics (restart)' // web port
 			]
 		],
 		[
@@ -578,7 +580,8 @@ function GetOptionNames() {
 				'Messages de sauvegarde',
 				'Activer les cheats',
 				'Combat automatique',
-				'Graphismes 3D HD' // web port
+				'Graphismes 3D HD', // web port
+				'Graphismes HD (redém.)' // web port
 			]
 		],
 		[
@@ -612,7 +615,8 @@ function GetOptionNames() {
 				'Pokaż inf. zapis/odczyt',
 				'Włącz cheaty',
 				'Automatyczna walka',
-				'Ulepszona grafika 3D' // web port
+				'Ulepszona grafika 3D', // web port
+				'Grafika HD (restart)' // web port
 			]
 		],
 		[
@@ -646,7 +650,8 @@ function GetOptionNames() {
 				'Info o uložení/nahrání',
 				'Povolit cheaty',
 				'Automatický boj',
-				'Vylepšená 3D grafika' // web port
+				'Vylepšená 3D grafika', // web port
+				'HD grafika (restart)' // web port
 			]
 		]
 	]);
@@ -1487,7 +1492,8 @@ export class Layout {
 		const SetResolution = () => SetOptionString(2, GetResolutionString());
 		const SetFullscreen = () => SetOptionString(3, WindowModeNameProvider(game.CoreConfiguration.WindowMode));
 		const SetGraphicFilter = () => SetOptionString(4, game.CoreConfiguration.GraphicFilter === GraphicFilter.None ? off
-			: game.CoreConfiguration.GraphicFilter === GraphicFilter.PixelArt ? (game.GameLanguage === GameLanguage.German ? 'Pixelart' : 'Pixel art') // web port
+			: game.CoreConfiguration.GraphicFilter === GraphicFilter.PixelArt ? (game.CoreConfiguration.HDGraphics !== false ? 'HD' // web port: HD graphics instead of the screen filter
+				: game.GameLanguage === GameLanguage.German ? 'Pixelart' : 'Pixel art') // web port
 			: enumName(GraphicFilter, game.CoreConfiguration.GraphicFilter));
 		const SetGraphicFilterOverlay = () => SetOptionString(5, game.CoreConfiguration.GraphicFilterOverlay === GraphicFilterOverlay.None ? off : enumName(GraphicFilterOverlay, game.CoreConfiguration.GraphicFilterOverlay));
 		const SetEffects = () => SetOptionString(6, game.CoreConfiguration.Effects === Effects.None ? off : enumName(Effects, game.CoreConfiguration.Effects));
@@ -1511,6 +1517,7 @@ export class Layout {
 		const SetSaveLoadInfo = () => SetOptionString(21, game.CoreConfiguration.ShowSaveLoadMessage ? on : off);
 		const SetCheats = () => SetOptionString(22, cheatsEnabled ? on : off);
 		const SetEnhanced3D = () => SetOptionString(24, game.CoreConfiguration.Enhanced3D !== false ? on : off); // web port
+		const SetHDGraphics = () => SetOptionString(25, game.CoreConfiguration.HDGraphics !== false ? on : off); // web port
 		const SetAutoBattle = () => SetOptionString(23,getValue(Layout.AutoBattleOptions, game.GameLanguage)[Util.Limit(0, Math.trunc(game.CoreConfiguration.AutoBattleRounds / 5), 3)]);
 
 		const UpdateShowFogOption = () => SetOptionAction(13, game.CoreConfiguration.ShowFloor && game.CoreConfiguration.ShowCeiling ? ((index, _) => ToggleFog()) : nullOptionAction);
@@ -1550,6 +1557,7 @@ export class Layout {
 					SetCheats();
 					SetAutoBattle();
 					SetEnhanced3D();
+					SetHDGraphics();
 					break;
 			}
 		};
@@ -1759,6 +1767,12 @@ export class Layout {
 		AddOption((index, _) => {
 			game.CoreConfiguration.Enhanced3D = game.CoreConfiguration.Enhanced3D === false;
 			SetEnhanced3D();
+			changedConfiguration = true;
+		});
+		// Web port: HD graphics (upscaled graphics, the host reads CoreConfiguration.HDGraphics at the start)
+		AddOption((index, _) => {
+			game.CoreConfiguration.HDGraphics = game.CoreConfiguration.HDGraphics === false;
+			SetHDGraphics();
 			changedConfiguration = true;
 		});
 

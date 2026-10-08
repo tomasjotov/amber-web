@@ -50,7 +50,7 @@ const SerializedProperties = Object.freeze([
 	'ShowFog', 'ExtendedSavegameSlots', 'AdditionalSavegameNames', 'ContinueSavegameSlot', 'AdditionalSavegameSlots',
 	'ShowSaveLoadMessage', 'Movement3D', 'TurnWithArrowKeys', 'Language',
 	// web port additions
-	'Enhanced3D'
+	'Enhanced3D', 'HDGraphics'
 ]);
 
 const IgnoreWhenNull = new Set([
@@ -173,6 +173,8 @@ export class Configuration {
 		this.Language = getDefaultLanguage();
 		// Web port: enhanced 3D rendering (smooth palette texture filtering, wall shading, smooth fog)
 		this.Enhanced3D = true;
+		// Web port: HD graphics (all graphics upscaled 4x with a palette preserving pixel art upscaler, needs a restart)
+		this.HDGraphics = true;
 	}
 
 	RequestSave() {
