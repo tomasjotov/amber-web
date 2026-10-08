@@ -1,35 +1,85 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="aw-root">
 <head>
 	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<meta name="theme-color" content="#07060a">
 	<title>Amberstar Web</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="../src/host/shell.css">
 	<style>
-		:root { color-scheme: dark; }
-		html, body { margin: 0; height: 100%; background: #000; color: #ddd; font-family: system-ui, sans-serif; }
-		#game { position: fixed; inset: 0; }
-		#game canvas { cursor: none; image-rendering: pixelated; }
-		#loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 16px; text-align: center; }
-		#loader h1 { margin: 0; font-size: 28px; letter-spacing: 2px; color: #e8c070; }
-		#status { max-width: 560px; line-height: 1.5; }
-		#start label { display: inline-block; padding: 10px 18px; border: 1px solid #e8c070; border-radius: 6px; cursor: pointer; color: #e8c070; }
+		#game { position: fixed; inset: 0; z-index: 1; }
+		#game canvas { cursor: none; image-rendering: pixelated; opacity: 0; transition: opacity .9s ease; }
+		html.aw-ready #game canvas { opacity: 1; }
+		/* main.js hides the loader with the hidden attribute: fade it out instead */
+		#loader[hidden] { display: flex; opacity: 0; visibility: hidden; pointer-events: none; }
+		#loader:has(#start:not([hidden])) .aw-progress { display: none; }
+		#status { max-width: 560px; line-height: 1.6; text-transform: none; letter-spacing: .06em; font-size: 13px; }
+		#start { margin-top: 18px; }
+		#start label { display: inline-block; padding: 10px 20px; border: 1px solid var(--aw-gold-dim); border-radius: 8px; cursor: pointer; color: var(--aw-gold);
+			letter-spacing: .12em; text-transform: uppercase; font-size: 13px; background: rgba(227,180,90,.06); transition: background .15s, border-color .15s; }
+		#start label:hover { background: rgba(227,180,90,.14); border-color: var(--aw-gold); }
 		#start input { display: none; }
-		#reset-data { position: fixed; right: 8px; bottom: 8px; z-index: 10; background: transparent; color: #555; border: 1px solid #333; border-radius: 4px; font-size: 11px; cursor: pointer; }
-		#reset-data:hover { color: #aaa; }
+		#reset-data { position: fixed; right: 10px; bottom: 10px; z-index: 10; background: rgba(14,10,20,.6); color: #5d5548; border: 1px solid #2a2218; border-radius: 6px;
+			font: 11px system-ui, sans-serif; letter-spacing: .06em; padding: 4px 8px; cursor: pointer; opacity: 0; transition: opacity .3s, color .15s; }
+		html:not(.aw-ready) #reset-data, html.aw-ui-visible #reset-data { opacity: 1; }
+		#reset-data:hover { color: #bdb5a5; }
 	</style>
 </head>
 <body>
-	<a href="../index.html" style="position:fixed;top:6px;right:8px;color:#666;font:12px system-ui;text-decoration:none;z-index:2">← game selection</a>
-	<div id="loader">
-		<h1>AMBERSTAR</h1>
-		<div id="status">Loading…</div>
+	<div id="loader" class="aw-loader">
+		<a class="aw-back-link" href="../index.html">‹ Game selection</a>
+		<div class="aw-emblem"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="aw-star" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff1bf"/><stop offset=".55" stop-color="#e3b45a"/><stop offset="1" stop-color="#7a5418"/></radialGradient></defs><circle cx="32" cy="32" r="29" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="1"/><path fill="url(#aw-star)" d="M32 6l6.5 18.5L58 26l-15.5 11.5L48 57 32 45.5 16 57l5.5-19.5L6 26l19.5-1.5z"/></svg></div>
+		<div class="aw-badge">THALION · 1992</div>
+		<h1 class="aw-title">Amberstar</h1>
+		<div class="aw-subtitle">Classic · the original interface in your browser</div>
+		<div class="aw-progress aw-indeterminate"><div class="aw-progress-fill"></div></div>
+		<div id="status" class="aw-status">Loading…</div>
 		<div id="start" hidden>
 			<label>Choose the Amberfiles folder<input id="dir-input" type="file" webkitdirectory directory multiple></label>
 		</div>
+		<div class="aw-loader-hint"><kbd>F11</kbd> fullscreen &nbsp;·&nbsp; display settings: move the mouse to the top right corner</div>
 	</div>
 	<div id="game"></div>
 	<button id="reset-data" title="Forget the stored game data">reset data</button>
 	<script src="vendor/phaser.min.js"></script>
+	<script type="module">
+		import { Presentation } from '../src/host/presentation.js';
+		// Background, frame, fullscreen and settings around the Phaser canvas (Phaser sizes the canvas itself)
+		const container = document.getElementById('game');
+		const presentation = new Presentation({
+			managed: false,
+			container,
+			backHref: '../index.html',
+			sampleSource: () => window.amberstarScreen ?? null,
+			hint: '<kbd>F11</kbd> fullscreen',
+			onMuteChanged: muted => {
+				// silence the music without changing the game's own music option
+				const music = window.amberstar?.music;
+				if (!music)
+					return;
+				music.enabled = !muted;
+				if (muted)
+					music.port?.postMessage({ type: 'stop' });
+				else if (music.currentSong) {
+					music.unlock?.();
+					music.port?.postMessage({ type: 'play', index: music.currentSong });
+				}
+			},
+		});
+		new MutationObserver(() => {
+			const canvas = container.querySelector('canvas');
+			if (canvas && canvas !== presentation.canvas)
+				presentation.attachCanvas(canvas);
+		}).observe(container, { childList: true, subtree: true });
+		const loader = document.getElementById('loader');
+		const revealWhenLoaded = () => {
+			if (loader.hidden && !presentation.ready)
+				presentation.reveal();
+		};
+		new MutationObserver(revealWhenLoaded).observe(loader, { attributes: true, attributeFilter: ['hidden'] });
+	</script>
 	<script type="module" src="src/main.js"></script>
 </body>
 </html>

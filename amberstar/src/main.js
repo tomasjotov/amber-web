@@ -141,6 +141,7 @@ function runPhaser(assets, setup) {
 			this.screenTexture = this.textures.createCanvas('screen', 320, 200);
 			this.add.image(0, 0, 'screen').setOrigin(0, 0);
 			this.imageData = this.screenTexture.context.createImageData(320, 200);
+			window.amberstarScreen = this.screenTexture.canvas; // source of the ambient background (index.html)
 
 			game = new Game(setup, assets, {
 				screenFactories,

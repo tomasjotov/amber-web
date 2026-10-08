@@ -60,7 +60,7 @@ const getModifiers = e => (e.shiftKey ? KeyModifiers.Shift : 0) | (e.ctrlKey ? K
  * Loads all files of a data folder. The file names come from `<folder>/files.json` (static web servers,
  * created by tools/make-file-lists.mjs) or from the directory listing of the dev server (tools/serve.mjs).
  */
-export async function fetchDataFolder(baseUrl) {
+export async function fetchDataFolder(baseUrl, onProgress = null) {
 	let names = null;
 	try {
 		const response = await fetch(`${baseUrl}/files.json`, { cache: 'no-cache' });
@@ -77,10 +77,13 @@ export async function fetchDataFolder(baseUrl) {
 		names = await listResponse.json();
 	}
 	const files = new Map();
+	let loaded = 0;
+	onProgress?.(0, names.length);
 	await Promise.all(names.map(async name => {
 		const response = await fetch(`${baseUrl}/${name.split('/').map(encodeURIComponent).join('/')}`);
 		if (response.ok)
 			files.set(name, new Uint8Array(await response.arrayBuffer()));
+		onProgress?.(++loaded, names.length);
 	}));
 	return files;
 }
@@ -93,6 +96,19 @@ function isMuted() {
 		return false;
 	}
 }
+
+/** Gives the browser a chance to repaint (e.g. the loading screen) before long synchronous work. */
+const yieldToBrowser = () => new Promise(resolve => {
+	let done = false;
+	const finish = () => {
+		if (!done) {
+			done = true;
+			resolve();
+		}
+	};
+	requestAnimationFrame(() => setTimeout(finish, 0));
+	setTimeout(finish, 50);
+});
 
 export class AmbermoonHost {
 	static get muted() { return isMuted(); }
@@ -112,6 +128,37 @@ export class AmbermoonHost {
 		this.lastTime = 0;
 		this.running = false;
 		this.onError = options.onError ?? (e => console.error(e));
+		this.renderListeners = [];
+		this.pointerInside = true;
+	}
+
+	/** listener(canvas) is called right after each rendered frame (the WebGL drawing buffer is still valid). */
+	addRenderListener(listener) {
+		this.renderListeners.push(listener);
+	}
+
+	/** Mutes or unmutes all audio at runtime (see also localStorage 'amber-web-mute'). */
+	setMuted(muted) {
+		const audioOutput = this.audioOutput;
+		if (audioOutput == null)
+			return;
+		if (muted) {
+			audioOutput.Enabled = false;
+			Object.defineProperty(audioOutput, 'Enabled', { configurable: true, get: () => false, set: () => { } });
+		} else {
+			delete audioOutput.Enabled; // back to the accessor of the prototype
+			audioOutput.Enabled = audioOutput.Available && this.configuration.Music;
+			this.#guard(() => {
+				if (audioOutput.Enabled) {
+					audioOutput.unlock?.();
+					if (this.Game != null)
+						this.Game.ContinueMusic();
+					else if (this.mainMenu != null || this.intro != null)
+						this.musicManager?.GetSong(this.intro != null ? Song.Intro : Song.Menu)?.Play(audioOutput);
+				}
+				this.Game?.ExternalMusicChanged();
+			});
+		}
 	}
 
 	get windowSize() {
@@ -122,8 +169,11 @@ export class AmbermoonHost {
 	#updateCanvasSize() {
 		const size = this.windowSize;
 		const dpr = window.devicePixelRatio || 1;
-		const w = Math.round(size.Width * dpr);
-		const h = Math.round(size.Height * dpr);
+		// device pixels from the exact CSS size (the page may size the canvas to fractional CSS pixels
+		// so that it covers an exact number of device pixels, see presentation.js)
+		const rect = this.canvas.getBoundingClientRect();
+		const w = Math.max(1, Math.round(rect.width * dpr));
+		const h = Math.max(1, Math.round(rect.height * dpr));
 		if (this.canvas.width !== w || this.canvas.height !== h) {
 			this.canvas.width = w;
 			this.canvas.height = h;
@@ -133,6 +183,7 @@ export class AmbermoonHost {
 
 	async start(files, setStatus = () => { }) {
 		setStatus('Loading resources ...');
+		await yieldToBrowser();
 		await Resources.load(this.options.assetsUrl ?? 'assets/');
 		this.storage = await PersistentStorage.open(this.options.storageName ?? 'ambermoon-web');
 		const configStorage = this.storage.jsonView('ambermoon.cfg');
@@ -145,6 +196,7 @@ export class AmbermoonHost {
 		}
 
 		setStatus('Loading game data ...');
+		await yieldToBrowser();
 		let gameData = new GameData(GameData.LoadPreference.PreferExtracted, null, false);
 		gameData.LoadFromFiles(files);
 		if (!gameData.Loaded)
@@ -152,6 +204,7 @@ export class AmbermoonHost {
 		// Another game (Amberstar) can replace the world data while keeping the Ambermoon engine assets.
 		if (this.options.transformGameData) {
 			setStatus('Converting game data ...');
+			await yieldToBrowser();
 			const transformed = await this.options.transformGameData(gameData);
 			gameData = transformed.gameData;
 			this.savegameManagerFactory = transformed.savegameManagerFactory ?? null;
@@ -159,6 +212,8 @@ export class AmbermoonHost {
 		this.gameData = gameData;
 
 		const features = gameData.Advanced ? Features.AmbermoonAdvanced : Features.None;
+		setStatus('Starting ...');
+		await yieldToBrowser();
 		this.#startGame(gameData, gameData.Language, features);
 		this.#setupInput();
 		this.running = true;
@@ -222,7 +277,7 @@ export class AmbermoonHost {
 		audioOutput.Volume = Math.max(0, Math.min(100, configuration.Volume)) / 100;
 		audioOutput.Enabled = audioOutput.Available && configuration.Music && !AmbermoonHost.muted;
 		if (AmbermoonHost.muted)
-			Object.defineProperty(audioOutput, 'Enabled', { get: () => false, set: () => { } });
+			Object.defineProperty(audioOutput, 'Enabled', { configurable: true, get: () => false, set: () => { } });
 		const additionalPalettes = [Object.assign(new Graphic(), { Width: 32, Height: 1, IndexedGraphic: false, Data: new Uint8Array(32 * 4) })];
 
 		const musicManager = this.musicManager = new MusicManager(configuration, gameData);
@@ -393,7 +448,15 @@ export class AmbermoonHost {
 					this.Game?.OnMouseUp(position, buttonOf(e));
 			});
 		});
+		// The game draws its own cursor: hide it while the mouse is outside of the game area
+		canvas.addEventListener('mouseleave', () => {
+			this.pointerInside = false;
+			if (this.cursor)
+				this.cursor.Visible = false;
+		});
+		canvas.addEventListener('mouseenter', () => { this.pointerInside = true; });
 		canvas.addEventListener('mousemove', e => {
+			this.pointerInside = true;
 			const position = this.mousePosition = this.#toGamePosition(e);
 			this.#guard(() => {
 				if (this.mainMenu != null)
@@ -489,6 +552,8 @@ export class AmbermoonHost {
 		this.lastTime = time;
 		this.#guard(() => this.#update(delta));
 		this.#guard(() => this.#render());
+		for (const listener of this.renderListeners)
+			this.#guard(() => listener(this.canvas));
 		if (schedule)
 			requestAnimationFrame(t => this.#frame(t));
 	}
@@ -519,6 +584,8 @@ export class AmbermoonHost {
 	}
 
 	#render() {
+		if (!this.pointerInside && this.cursor?.Visible)
+			this.cursor.Visible = false;
 		if (this.renderView != null && this.configuration != null)
 			this.renderView.Enhanced3D = this.configuration.Enhanced3D !== false;
 		if (this.mainMenu != null)
